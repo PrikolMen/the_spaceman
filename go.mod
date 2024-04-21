@@ -1,6 +1,6 @@
 module github.com/PrikolMen/the_spaceman
 
-go 1.22.2
+go 1.23
 
 require (
 	github.com/bwmarrin/discordgo v0.28.1
