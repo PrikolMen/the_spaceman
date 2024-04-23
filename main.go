@@ -106,7 +106,7 @@ func main() {
 		})
 	})
 
-	// Text chat handler
+	// Text channel handler
 	session.AddHandler(func(session *discordgo.Session, m *discordgo.MessageCreate) {
 		if m.Author.Bot {
 			return
@@ -129,7 +129,7 @@ func main() {
 		}
 	})
 
-	// Voice chat handler
+	// Voice channel handler
 	session.AddHandler(func(session *discordgo.Session, voiceState *discordgo.VoiceStateUpdate) {
 		// Previous user voice state
 		beforeUpdate := voiceState.BeforeUpdate
@@ -194,7 +194,7 @@ func voiceStateChanged(db *sql.DB, session *discordgo.Session, voiceState *disco
 	// Creating room if user in allowed channel
 	user, err := session.User(voiceState.UserID)
 	if err != nil {
-		fmt.Println("Error getting voice chat user,", err)
+		fmt.Println("Error getting voice channel user,", err)
 		return
 	}
 
@@ -207,10 +207,10 @@ func voiceStateChanged(db *sql.DB, session *discordgo.Session, voiceState *disco
 	createRoom(db, session, voiceState.GuildID, user, channel.ParentID, channel.Position)
 }
 
-// Voice chat permissions for creator
+// Voice channel permissions for creator
 const ChannelPermissions int64 = discordgo.PermissionManageChannels | discordgo.PermissionVoiceMoveMembers
 
-// Voice chat creation
+// Voice channel creation
 func createRoom(db *sql.DB, session *discordgo.Session, guildID string, user *discordgo.User, parentID string, position int) {
 	channel, err := session.GuildChannelCreate(guildID, fmt.Sprintf(RoomPattern, user.GlobalName), discordgo.ChannelTypeGuildVoice)
 	if err != nil {
@@ -236,24 +236,31 @@ func createRoom(db *sql.DB, session *discordgo.Session, guildID string, user *di
 	fmt.Printf("Voice channel '%s ( %s )' has been created for '%s'\n", channel.Name, channelID, user.GlobalName)
 
 	// Setting new voice channel position
-	session.ChannelEdit(channelID, &discordgo.ChannelEdit{
+	_, err = session.ChannelEdit(channelID, &discordgo.ChannelEdit{
 		Position: &position,
 		ParentID: parentID,
 	})
+
+	if err != nil {
+		fmt.Printf("Error setting voice channel '%s ( %s )' position, %s\n", channel.Name, channelID, err)
+		removeRoom(db, session, channelID)
+		return
+	}
 
 	userID := user.ID
 
 	// Moving user into new voice channel
 	err = session.GuildMemberMove(guildID, userID, &channelID)
 	if err != nil {
-		fmt.Printf("Error moving user '%s' into voice channel '%s', %s\n", userID, channelID, err)
+		fmt.Printf("Error moving user '%s' into voice channel '%s ( %s )', %s\n", userID, channelID, channel.Name, err)
+		removeRoom(db, session, channelID)
 		return
 	}
 
-	// Setting voice chat permissions for creator
+	// Setting voice channel permissions for creator
 	err = session.ChannelPermissionSet(channelID, userID, discordgo.PermissionOverwriteTypeMember, ChannelPermissions, 0)
 	if err != nil {
-		fmt.Printf("Error setting voice chat '%s' permissions, for '%s', %s\n", channelID, userID, err)
+		fmt.Printf("Error setting voice channel '%s ( %s )' permissions, for '%s', %s\n", channel.Name, channelID, userID, err)
 	}
 }
 
